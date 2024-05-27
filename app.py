@@ -12,6 +12,7 @@ def set_seeds(seed=42):
 
 def create_model():
     model = Sequential([
+        # Camadas CNN
         Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)),
         BatchNormalization(),
         MaxPooling2D((2, 2)),
@@ -28,7 +29,12 @@ def create_model():
         Dropout(0.25),
 
         Flatten(),
+        
+        # Camadas MLP
         Dense(512, activation='relu'),
+        BatchNormalization(),
+        Dropout(0.5),
+        Dense(256, activation='relu'),
         BatchNormalization(),
         Dropout(0.5),
         Dense(1, activation='sigmoid')
