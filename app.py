@@ -109,7 +109,7 @@ def train_and_evaluate_model():
 
         cnn_model = create_model()
 
-        history = cnn_model.fit(
+        history =cnn_model.fit(
             train_generator,
             epochs=15,
             validation_data=validation_generator,
