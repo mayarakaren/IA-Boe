@@ -4,30 +4,28 @@ Este repositório contém um projeto de aprendizado profundo usando TensorFlow e
 
 ## Índice
 
-- [Bovino Dermatite Classificação](#bovino-dermatite-classificação)
-  - [Índice](#índice)
-  - [Instalação](#instalação)
-  - [Descrição do Código](#descrição-do-código)
-    - [Importação de Bibliotecas](#importação-de-bibliotecas)
-    - [Definição da Função para Configuração de Sementes](#definição-da-função-para-configuração-de-sementes)
-    - [Definição do Modelo CNN](#definição-do-modelo-cnn)
-    - [Compilação do Modelo](#compilação-do-modelo)
-    - [Aumento de Dados](#aumento-de-dados)
-    - [Geradores de Dados](#geradores-de-dados)
-    - [Pesos de Classes](#pesos-de-classes)
-    - [Callbacks](#callbacks)
-    - [Treinamento e Avaliação do Modelo](#treinamento-e-avaliação-do-modelo)
-    - [Função de Predição](#função-de-predição)
-  - [Uso](#uso)
-  - [Resultados](#resultados)
-  - [Observação](#observação)
+- [Instalação](#instalação)
+- [Descrição do Código](#descrição-do-código)
+  - [Importação de Bibliotecas](#importação-de-bibliotecas)
+  - [Definição da Função para Configuração de Sementes](#definição-da-função-para-configuração-de-sementes)
+  - [Definição do Modelo CNN](#definição-do-modelo-cnn)
+  - [Compilação do Modelo](#compilação-do-modelo)
+  - [Aumento de Dados](#aumento-de-dados)
+  - [Geradores de Dados](#geradores-de-dados)
+  - [Pesos de Classes](#pesos-de-classes)
+  - [Callbacks](#callbacks)
+  - [Treinamento e Avaliação do Modelo](#treinamento-e-avaliação-do-modelo)
+  - [Função de Predição](#função-de-predição)
+- [Uso](#uso)
+- [Resultados](#resultados)
+- [Observação](#observação)
 
 ## Instalação
 
 Para rodar o código, você precisa ter o Python instalado junto com as bibliotecas necessárias. Você pode instalar as bibliotecas com o seguinte comando:
 
 ```bash
-pip install tensorflow numpy scikit-learn
+pip install tensorflow numpy scikit-learn flask matplotlib seaborn
 ```
 
 Certifique-se de que seus dados de imagem estão organizados da seguinte forma:
@@ -54,20 +52,31 @@ A primeira parte do código importa as bibliotecas necessárias para construir e
 ```python
 import tensorflow as tf
 import numpy as np
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, BatchNormalization
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, BatchNormalization, GlobalAveragePooling2D
+from tensorflow.keras.preprocessing.image import ImageDataGenerator, img_to_array, load_img
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.applications import VGG16
 from sklearn.utils import class_weight
+from sklearn.metrics import confusion_matrix, classification_report
+import matplotlib.pyplot as plt
+import seaborn as sns
+from flask import Flask, request, jsonify
+import os
+import argparse
 ```
 
 - `tensorflow` e `tensorflow.keras`: Bibliotecas de aprendizado profundo usadas para construir e treinar a CNN.
-- `Sequential`: Permite a criação de um modelo sequencial.
-- `Conv2D`, `MaxPooling2D`, `Flatten`, `Dense`, `Dropout`, `BatchNormalization`: Camadas usadas para construir a arquitetura da CNN.
-- `ImageDataGenerator`: Ferramenta para gerar dados de imagem com aumento (augmentation).
+- `Sequential`, `load_model`: Permite a criação e carregamento de modelos sequenciais.
+- `Conv2D`, `MaxPooling2D`, `Flatten`, `Dense`, `Dropout`, `BatchNormalization`, `GlobalAveragePooling2D`: Camadas usadas para construir a arquitetura da CNN.
+- `ImageDataGenerator`, `img_to_array`, `load_img`: Ferramentas para gerar e processar dados de imagem.
 - `EarlyStopping`, `ModelCheckpoint`: Callbacks para controle do treinamento.
+- `VGG16`: Modelo pré-treinado usado como base para a CNN.
 - `class_weight`: Função para computar pesos de classes desbalanceadas.
-- `numpy`: Biblioteca para operações numéricas.
+- `confusion_matrix`, `classification_report`: Ferramentas para avaliação de modelo.
+- `matplotlib.pyplot`, `seaborn`: Bibliotecas para visualização de dados.
+- `Flask`: Framework para construção da API.
+- `os`, `argparse`: Bibliotecas padrão para manipulação de arquivos e parsing de argumentos.
 
 ### Definição da Função para Configuração de Sementes
 
@@ -81,30 +90,16 @@ def set_seeds(seed=42):
 
 ### Definição do Modelo CNN
 
-A função `create_model` define a arquitetura da CNN. Este modelo é composto por várias camadas de convolução, normalização em lotes, pooling, dropout, e camadas densas totalmente conectadas.
+A função `create_model` define a arquitetura da CNN usando o modelo pré-treinado VGG16.
 
 ```python
 def create_model():
+    base_model = VGG16(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+    base_model.trainable = False  # Congela a base pré-treinada
+
     model = Sequential([
-        # Camadas CNN
-        Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)),
-        BatchNormalization(),
-        MaxPooling2D((2, 2)),
-        Dropout(0.25),
-        
-        Conv2D(64, (3, 3), activation='relu'),
-        BatchNormalization(),
-        MaxPooling2D((2, 2)),
-        Dropout(0.25),
-
-        Conv2D(128, (3, 3), activation='relu'),
-        BatchNormalization(),
-        MaxPooling2D((2, 2)),
-        Dropout(0.25),
-
-        Flatten(),
-        
-        # Camadas MLP
+        base_model,
+        GlobalAveragePooling2D(),
         Dense(512, activation='relu'),
         BatchNormalization(),
         Dropout(0.5),
@@ -120,12 +115,10 @@ def create_model():
     return model
 ```
 
-- `Conv2D`: Camada de convolução para extrair características das imagens.
-- `BatchNormalization`: Normaliza a saída da camada anterior para acelerar o treinamento e melhorar a estabilidade do modelo.
-- `MaxPooling2D`: Reduz a dimensionalidade espacial (downsampling), diminuindo a quantidade de parâmetros e computação na rede.
-- `Dropout`: Regularização para prevenir overfitting, desconectando aleatoriamente unidades da rede durante o treinamento.
-- `Flatten`: Achata a entrada para uma dimensão, preparando-a para a camada densa.
-- `Dense`: Camada totalmente conectada para a classificação final.
+- `VGG16`: Modelo pré-treinado utilizado como base.
+- `GlobalAveragePooling2D`: Reduz a dimensionalidade da saída da VGG16.
+- `Dense`, `BatchNormalization`, `Dropout`: Camadas adicionais para refinar a saída do modelo.
+- `sigmoid`: Função de ativação usada para a saída binária.
 
 ### Compilação do Modelo
 
@@ -187,7 +180,8 @@ test_generator = test_datagen.flow_from_directory(
     test_dir,
     target_size=(224, 224),
     batch_size=32,
-    class_mode='binary'
+    class_mode='binary',
+    shuffle=False  # Importante para garantir que as predições e rótulos correspondam corretamente
 )
 ```
 
@@ -226,22 +220,21 @@ early_stopping_cb = EarlyStopping(monitor='val_loss', patience=5, restore_best_w
 
 ### Treinamento e Avaliação do Modelo
 
-O treinamento e a avaliação do modelo são realizados em um loop que continua até que uma condição de parada seja atendida.
+O treinamento e a avaliação do modelo são realizados até que a acurácia de validação atinja um ponto de referência satisfatório.
 
 ```python
 def train_and_evaluate_model():
     set_seeds()
 
-    # Data Augmentation
     train_datagen = ImageDataGenerator(
         rescale=1./255,
         shear_range=0.2,
         zoom_range=0.2,
-        horizontal_flip=True,
-        rotation_range=30,
-        width
+        horizontal_flip
 
-_shift_range=0.2,
+=True,
+        rotation_range=30,
+        width_shift_range=0.2,
         height_shift_range=0.2,
         brightness_range=[0.8, 1.2],
         fill_mode='nearest'
@@ -271,10 +264,10 @@ _shift_range=0.2,
         test_dir,
         target_size=(224, 224),
         batch_size=32,
-        class_mode='binary'
+        class_mode='binary',
+        shuffle=False  # Importante para garantir que as predições e rótulos correspondam corretamente
     )
 
-    # Class weights to handle imbalance
     class_weights = class_weight.compute_class_weight(
         'balanced',
         classes=np.unique(train_generator.classes),
@@ -282,106 +275,87 @@ _shift_range=0.2,
     )
     class_weights = {i: class_weights[i] for i in range(len(class_weights))}
 
-    best_val_accuracy = 0
-    best_model = None
+    model = create_model()
 
-    iteration = 0
-    while True:
-        iteration += 1
-        print(f"\nTraining model iteration {iteration}")
+    checkpoint_cb = ModelCheckpoint('bovino_dermatite_model_best.keras', save_best_only=True, monitor='val_accuracy', mode='max')
+    early_stopping_cb = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
-        checkpoint_cb = ModelCheckpoint('bovino_dermatite_model_best.keras', save_best_only=True, monitor='val_accuracy', mode='max')
-        early_stopping_cb = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+    history = model.fit(
+        train_generator,
+        steps_per_epoch=len(train_generator),
+        epochs=50,
+        validation_data=validation_generator,
+        validation_steps=len(validation_generator),
+        class_weight=class_weights,
+        callbacks=[checkpoint_cb, early_stopping_cb]
+    )
 
-        cnn_model = create_model()
+    model.save('bovino_dermatite_model_final.keras')
 
-        history = cnn_model.fit(
-            train_generator,
-            epochs=15,
-            validation_data=validation_generator,
-            callbacks=[checkpoint_cb, early_stopping_cb],
-            class_weight=class_weights
-        )
+    model = load_model('bovino_dermatite_model_best.keras')
+    test_loss, test_accuracy = model.evaluate(test_generator)
+    print(f'Test Accuracy: {test_accuracy:.4f}')
 
-        val_loss, val_accuracy = cnn_model.evaluate(validation_generator)
-        print(f"Iteration {iteration} - Perda na validação: {val_loss}")
-        print(f"Iteration {iteration} - Acurácia na validação: {val_accuracy}")
+    predictions = model.predict(test_generator)
+    y_true = test_generator.classes
+    y_pred = np.round(predictions).flatten()
 
-        if val_accuracy > best_val_accuracy:
-            best_val_accuracy = val_accuracy
-            best_model = cnn_model
+    cm = confusion_matrix(y_true, y_pred)
+    cr = classification_report(y_true, y_pred, target_names=['normal', 'dermatite'])
 
-            best_model.save('bovino_dermatite_model_final.keras')
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['normal', 'dermatite'], yticklabels=['normal', 'dermatite'])
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.title('Confusion Matrix')
+    plt.show()
 
-            test_loss, test_accuracy = best_model.evaluate(test_generator)
-            print(f"Perda no teste: {test_loss}")
-            print(f"Acurácia no teste: {test_accuracy}")
-
-        # Adicionando condição para predição a cada 5 iterações
-        if iteration % 5 == 0:
-            def predict_image(img_path):
-                img = tf.keras.utils.load_img(img_path, target_size=(224, 224))
-                img_array = tf.keras.utils.img_to_array(img)
-                img_array = np.expand_dims(img_array, axis=0)
-                img_array /= 255.0
-
-                prediction = best_model.predict(img_array)
-                return 'Dermatite' if prediction[0][0] > 0.5 else 'Normal'
-
-            result = predict_image('data/train/dermatite/Lumpy_Skin_316.png')
-            print(f"Resultado da predição: {result}")
-
-        # Interrompe se atingir 10 iterações sem melhorias
-        if iteration >= 10:
-            break
-
-train_and_evaluate_model()
+    print(cr)
 ```
-
-- `set_seeds`: Configura a semente para reprodutibilidade.
-- `train_generator`, `validation_generator`, `test_generator`: Geradores de dados para treino, validação e teste.
-- `class_weights`: Calcula os pesos das classes para lidar com desbalanceamento.
-- `checkpoint_cb`, `early_stopping_cb`: Callbacks para salvar o melhor modelo e interromper o treinamento antecipadamente se necessário.
-- `cnn_model.fit`: Treina o modelo por até 15 épocas.
-- `cnn_model.evaluate`: Avalia o modelo nos dados de validação e teste.
-- `predict_image`: Função interna para predizer a classe de uma imagem específica a cada 5 iterações.
-- O loop de treinamento é interrompido após 10 iterações sem melhorias significativas.
 
 ### Função de Predição
 
-A função `predict_image` permite que o modelo faça predições em novas imagens.
+A função `predict_image` é usada para realizar predições em novas imagens.
 
 ```python
-def predict_image(img_path):
-    img = tf.keras.utils.load_img(img_path, target_size=(224, 224))
-    img_array = tf.keras.utils.img_to_array(img)
+def predict_image(model_path, image_path):
+    model = load_model(model_path)
+    img = load_img(image_path, target_size=(224, 224))
+    img_array = img_to_array(img) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
-    img_array /= 255.0
 
-    prediction = best_model.predict(img_array)
-    return 'Dermatite' if prediction[0][0] > 0.5 else 'Normal'
-
-result = predict_image('data/train/dermatite/Lumpy_Skin_316.png')
-print(f"Resultado da predição: {result}")
+    prediction = model.predict(img_array)
+    if prediction >= 0.5:
+        return 'dermatite'
+    else:
+        return 'normal'
 ```
 
-- `load_img`: Carrega uma imagem do caminho especificado.
-- `img_to_array`: Converte a imagem carregada para um array NumPy.
-- `np.expand_dims`: Adiciona uma dimensão extra para representar o lote.
-- A imagem é normalizada para o intervalo [0, 1].
-- `predict`: Faz a predição usando o modelo treinado.
-- A função retorna 'Dermatite' se a previsão for maior que 0.5, caso contrário, retorna 'Normal'.
+- `predict_image`: Carrega o modelo salvo e faz uma predição em uma imagem fornecida.
+- `load_model`: Carrega o modelo salvo.
+- `load_img`: Carrega a imagem e redimensiona para 224x224 pixels.
+- `img_to_array`: Converte a imagem para um array.
+- `expand_dims`: Adiciona uma dimensão extra para corresponder ao formato esperado pelo modelo.
+- `predict`: Realiza a predição e retorna a classe com maior probabilidade.
 
 ## Uso
 
-1. **Preparação dos Dados**: Certifique-se de que as imagens estão organizadas nas pastas de treino, validação e teste.
-2. **Treinamento**: Execute o código para treinar o modelo. O modelo treinado será salvo como `bovino_dermatite_model_final.keras`.
-3. **Predição**: Use a função `predict_image` para classificar novas imagens.
+Para treinar o modelo, use:
+
+```bash
+python train_model.py
+```
+
+Para realizar predições em uma nova imagem, use:
+
+```bash
+python predict.py --model_path 'bovino_dermatite_model_best.keras' --image_path 'path_to_image.jpg'
+```
 
 ## Resultados
 
-Após o treinamento, o modelo será avaliado em termos de perda e acurácia tanto no conjunto de validação quanto no conjunto de teste. Exemplos de uso da função de predição também são fornecidos para testar novas imagens.
+Os resultados do modelo, incluindo a matriz de confusão e o relatório de classificação, são exibidos após o treinamento e a avaliação. A matriz de confusão e o relatório de classificação fornecem uma visão detalhada do desempenho do modelo em termos de precisão, recall, f1-score e acurácia para cada classe.
 
 ## Observação
 
-O script é configurado para treinar e avaliar o modelo continuamente em um loop infinito. Certifique-se de que isso é intencional, pois pode consumir muitos recursos de computação. Ajuste conforme necessário para seu ambiente de desenvolvimento ou produção.
+Certifique-se de que suas imagens estão organizadas corretamente nas diretorias de treino, validação e teste. Ajuste os hiperparâmetros conforme necessário para obter o melhor desempenho possível para seu conjunto de dados específico.
