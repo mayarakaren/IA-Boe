@@ -14,12 +14,12 @@ def predict_image(model, img_path):
 
     prediction = model.predict(img_array)
     accuracy = float(prediction[0][0]) if prediction[0][0] > 0.5 else float(1 - prediction[0][0])
-    predicted_class = 'Dermatite' if prediction[0][0] > 0.5 else 'Normal'
+    predicted_class = 'Dermatite Nodular' if prediction[0][0] > 0.5 else 'Normal'
     
     # Infer true class based on file name
     file_name = os.path.basename(img_path)
-    if 'Lumpy_Skin' in file_name or 'dermatite' in file_name:
-        true_class = 'Dermatite'
+    if 'Lumpy_Skin' in file_name or 'Dermatite Nodular' in file_name:
+        true_class = 'Dermatite Nodular'
     elif 'Normal_Skin' in file_name or 'normal' in file_name:
         true_class = 'Normal'
     else:
@@ -42,7 +42,7 @@ def predict():
         os.remove(file_path)
         
         # Determine if the prediction is positive or negative
-        result = "positivo" if predicted_class == "Dermatite" else "negativo"
+        result = "positivo" if predicted_class == "Dermatite Nodular" else "negativo"
         
         return jsonify({
             "predicted_class": predicted_class,
@@ -51,7 +51,7 @@ def predict():
         }), 200
 
 if __name__ == '__main__':
-    model_path = 'bovino_dermatite_model_final.keras'
+    model_path = 'bovino_Dermatite Nodular_model_final.keras'
     if not os.path.exists(model_path):
         print("Modelo não encontrado. Treine o modelo primeiro.")
     else:
